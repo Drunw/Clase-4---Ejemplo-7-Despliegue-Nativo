@@ -1,18 +1,22 @@
-FROM ghcr.io/graalvm/native-image:ol8-java17 AS build
+# Etapa de compilación: imagen oficial con GraalVM, Maven y Java 17
+FROM quay.io/quarkus/ubi-quarkus-mandrel:23.1-java17 AS build
 
+# Establecer el directorio de trabajo
 WORKDIR /app
 
-# Copia solo lo necesario
+# Copiar el proyecto (preferiblemente en partes)
 COPY pom.xml .
 COPY src ./src
+COPY .mvn/ .mvn/
+COPY mvnw .
+RUN chmod +x mvnw
 
-# Instala Maven
-RUN microdnf install -y maven
+# Compilar en modo nativo
+RUN ./mvnw package -Pnative -Dquarkus.native.container-build=true
 
-# Compila en nativo
-RUN mvn package -Pnative -Dquarkus.native.container-build=true
-
+# Etapa final: imagen mínima para ejecutar
 FROM quay.io/quarkus/quarkus-micro-image:2.0
+
 WORKDIR /work/
 COPY --from=build /app/target/*-runner saludo-runner
 RUN chmod 775 saludo-runner
