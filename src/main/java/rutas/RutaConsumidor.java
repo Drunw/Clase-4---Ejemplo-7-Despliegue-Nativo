@@ -15,7 +15,7 @@ public class RutaConsumidor extends RouteBuilder {
         restConfiguration()
                 .bindingMode(RestBindingMode.off);
 
-        rest("/ejemploJVM/{nombre}")
+        rest("/ejemploNativo/{nombre}")
                 .get()
                 .to("direct:rutaInicial");
 
