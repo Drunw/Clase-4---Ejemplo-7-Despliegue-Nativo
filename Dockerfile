@@ -1,23 +1,26 @@
-# Etapa de compilación: imagen oficial con GraalVM, Maven y Java 17
-FROM quay.io/quarkus/ubi-quarkus-mandrel:23.1-java17 AS build
+## Stage 1 : build with maven builder image with native capabilities
+FROM registry.redhat.io/quarkus/mandrel-for-jdk-21-rhel8:23.1 AS build
+COPY --chown=quarkus:quarkus --chmod=0755 mvnw /code/mvnw
+COPY --chown=quarkus:quarkus .mvn /code/.mvn
+COPY --chown=quarkus:quarkus pom.xml /code/
+USER root
+WORKDIR /code
+RUN ./mvnw -B org.apache.maven.plugins:maven-dependency-plugin:3.1.2:go-offline
+COPY src /code/src
+RUN ./mvnw package -Dnative
 
-# Establecer el directorio de trabajo
-WORKDIR /app
-
-# Copiar el proyecto (preferiblemente en partes)
-COPY pom.xml .
-COPY src ./src
-COPY .mvn/ .mvn/
-COPY mvnw .
-RUN chmod +x mvnw
-
-# Compilar en modo nativo
-RUN ./mvnw package -Pnative -Dquarkus.native.container-build=true
-
-# Etapa final: imagen mínima para ejecutar
-FROM quay.io/quarkus/quarkus-micro-image:2.0
-
+## Stage 2 : create the docker final image
+FROM registry.redhat.io/ubi9/ubi-minimal:9.5
 WORKDIR /work/
-COPY --from=build /app/target/*-runner saludo-runner
-RUN chmod 775 saludo-runner
-CMD ["./saludo-runner"]
+COPY --from=build /code/target/*-runner /work/application
+
+# set up permissions for user `1001`
+RUN chmod 775 /work /work/application \
+  && chown -R 1001 /work \
+  && chmod -R "g+rwX" /work \
+  && chown -R 1001:root /work
+
+EXPOSE 8080
+USER 1001
+
+CMD ["./application", "-Dquarkus.http.host=0.0.0.0"]
