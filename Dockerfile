@@ -1,26 +1,24 @@
-## Stage 1 : build with maven builder image with native capabilities
-FROM registry.redhat.io/quarkus/mandrel-for-jdk-21-rhel8:23.1 AS build
-COPY --chown=quarkus:quarkus --chmod=0755 mvnw /code/mvnw
-COPY --chown=quarkus:quarkus .mvn /code/.mvn
-COPY --chown=quarkus:quarkus pom.xml /code/
-USER root
-WORKDIR /code
-RUN ./mvnw -B org.apache.maven.plugins:maven-dependency-plugin:3.1.2:go-offline
-COPY src /code/src
-RUN ./mvnw package -Dnative
+FROM ghcr.io/graalvm/native-image:ol8-java17 AS build
 
-## Stage 2 : create the docker final image
-FROM registry.redhat.io/ubi9/ubi-minimal:9.5
+WORKDIR /app
+COPY . .
+
+# ✅ Asegura que ./mvnw se pueda ejecutar
+RUN chmod +x mvnw
+
+# Opcional: instala Maven si no viene preinstalado
+RUN microdnf install -y maven
+
+RUN ./mvnw package -Pnative -Dquarkus.native.container-build=true
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:9.5
 WORKDIR /work/
-COPY --from=build /code/target/*-runner /work/application
-
-# set up permissions for user `1001`
-RUN chmod 775 /work /work/application \
-  && chown -R 1001 /work \
-  && chmod -R "g+rwX" /work \
-  && chown -R 1001:root /work
+RUN chown 1001 /work \
+    && chmod "g+rwX" /work \
+    && chown 1001:root /work
+COPY --chown=1001:root --chmod=0755 target/*-runner /work/application
 
 EXPOSE 8080
 USER 1001
 
-CMD ["./application", "-Dquarkus.http.host=0.0.0.0"]
+ENTRYPOINT ["./application", "-Dquarkus.http.host=0.0.0.0"]
