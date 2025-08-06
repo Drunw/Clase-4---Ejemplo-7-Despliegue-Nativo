@@ -1,15 +1,16 @@
 FROM ghcr.io/graalvm/native-image:ol8-java17 AS build
 
 WORKDIR /app
-COPY . .
 
-# ✅ Asegura que ./mvnw se pueda ejecutar
-RUN chmod +x mvnw
+# Copia solo lo necesario
+COPY pom.xml .
+COPY src ./src
 
-# Opcional: instala Maven si no viene preinstalado
+# Instala Maven
 RUN microdnf install -y maven
 
-RUN ./mvnw package -Pnative -Dquarkus.native.container-build=true
+# Compila en nativo
+RUN mvn package -Pnative -Dquarkus.native.container-build=true
 
 FROM quay.io/quarkus/quarkus-micro-image:2.0
 WORKDIR /work/
